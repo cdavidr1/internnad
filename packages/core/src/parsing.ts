@@ -1,7 +1,8 @@
 import { ActionResponse } from "./types.ts";
 const jsonBlockPattern = /```json\n([\s\S]*?)\n```/;
 
-export const messageCompletionFooter = `\nResponse format should be formatted in a JSON block like this:
+export const messageCompletionFooter = `\nResponse format should be formatted in a JSON block like this,
+strictly like this only respond with this format, do not say anything else, ensure the json is correct:
 \`\`\`json
 { "user": "{{agentName}}", "text": "string", "action": "string" }
 \`\`\``;

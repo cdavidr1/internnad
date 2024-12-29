@@ -113,9 +113,9 @@ export class TwitterPostClient {
 
             const lastPostTimestamp = lastPost?.timestamp ?? 0;
             const minMinutes =
-                parseInt(this.runtime.getSetting("POST_INTERVAL_MIN")) || 90;
+                parseInt(this.runtime.getSetting("POST_INTERVAL_MIN")) || 180;
             const maxMinutes =
-                parseInt(this.runtime.getSetting("POST_INTERVAL_MAX")) || 180;
+                parseInt(this.runtime.getSetting("POST_INTERVAL_MAX")) || 360;
             const randomMinutes =
                 Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) +
                 minMinutes;
@@ -397,11 +397,16 @@ export class TwitterPostClient {
         });
         console.log("generate tweet content response:\n" + response);
 
+        const actionRegex = /["']action["']\s*:\s*(?:\{[^}]*\}|"[^"]*"|\[[^\]]*\]|[^,}]+)\s*,?/g;
+        const removeTrailingCommasRegex = /,\s*(?=[}\]])/g;
+
         // First clean up any markdown and newlines
         const cleanedResponse = response
             .replace(/```json\s*/g, "") // Remove ```json
             .replace(/```\s*/g, "") // Remove any remaining ```
             .replaceAll(/\\n/g, "\n")
+            .replace(actionRegex, "")
+            .replace(removeTrailingCommasRegex, "")
             .trim();
 
         // Try to parse as JSON first
@@ -409,16 +414,19 @@ export class TwitterPostClient {
             const jsonResponse = JSON.parse(cleanedResponse);
             if (jsonResponse.text) {
                 return this.trimTweetLength(jsonResponse.text);
+            } else {
+                //skip
+                return;
             }
-            if (typeof jsonResponse === "object") {
-                const possibleContent =
-                    jsonResponse.content ||
-                    jsonResponse.message ||
-                    jsonResponse.response;
-                if (possibleContent) {
-                    return this.trimTweetLength(possibleContent);
-                }
-            }
+            // if (typeof jsonResponse === "object") {
+            //     const possibleContent =
+            //         jsonResponse.content ||
+            //         jsonResponse.message ||
+            //         jsonResponse.response;
+            //     if (possibleContent) {
+            //         return this.trimTweetLength(possibleContent);
+            //     }
+            // }
         } catch (error) {
             error.linted = true; // make linter happy since catch needs a variable
 
@@ -465,8 +473,10 @@ export class TwitterPostClient {
                 "twitter"
             );
 
-            const homeTimeline = await this.client.fetchTimelineForActions(15);
+            const homeTimelineX = await this.client.fetchTimelineForActions(2);
+            const homeTimeline = homeTimelineX.slice(0,3);
             const results = [];
+            elizaLogger.log("Total actions on timeline: " + `${homeTimeline.length}`)
 
             for (const tweet of homeTimeline) {
                 try {
@@ -477,7 +487,7 @@ export class TwitterPostClient {
                         );
                     if (memory) {
                         elizaLogger.log(
-                            `Already processed tweet ID: ${tweet.id}`
+                            `Already processed tweet ID: ${tweet.id} + ${tweet.text}`
                         );
                         continue;
                     }
@@ -525,9 +535,10 @@ export class TwitterPostClient {
                     // Execute actions
                     if (actionResponse.like) {
                         try {
-                            await this.client.twitterClient.likeTweet(tweet.id);
-                            executedActions.push("like");
-                            elizaLogger.log(`Liked tweet ${tweet.id}`);
+                            // await this.client.twitterClient.likeTweet(tweet.id);
+                            // executedActions.push("like");
+                            // elizaLogger.log(`Liked tweet ${tweet.id}`);
+                            elizaLogger.log(`Fake-like ${tweet.id}`)
                         } catch (error) {
                             elizaLogger.error(
                                 `Error liking tweet ${tweet.id}:`,
@@ -538,9 +549,9 @@ export class TwitterPostClient {
 
                     if (actionResponse.retweet) {
                         try {
-                            await this.client.twitterClient.retweet(tweet.id);
-                            executedActions.push("retweet");
-                            elizaLogger.log(`Retweeted tweet ${tweet.id}`);
+                            // await this.client.twitterClient.retweet(tweet.id);
+                            // executedActions.push("retweet");
+                            elizaLogger.log(`Fake-Retweeted tweet ${tweet.id}`);
                         } catch (error) {
                             elizaLogger.error(
                                 `Error retweeting tweet ${tweet.id}:`,

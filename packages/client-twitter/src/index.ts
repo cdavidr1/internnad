@@ -33,11 +33,14 @@ export const TwitterClientInterface: Client = {
         await validateTwitterConfig(runtime);
 
         elizaLogger.log("Twitter client started");
+        elizaLogger.log(this.enableSearch);
 
         const manager = new TwitterManager(runtime, this.enableSearch);
 
+        // base
         await manager.client.init();
 
+        // post
         await manager.post.start();
 
         await manager.interaction.start();

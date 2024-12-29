@@ -95,6 +95,8 @@ export class TwitterInteractionClient {
     }
 
     async start() {
+        elizaLogger.log(`- Action Interval: ${(parseInt(this.runtime.getSetting("TWITTER_POLL_INTERVAL") ?? "120"))} seconds`);
+
         const handleTwitterInteractionsLoop = () => {
             this.handleTwitterInteractions();
             setTimeout(
@@ -227,6 +229,7 @@ export class TwitterInteractionClient {
 
             // for each tweet candidate, handle the tweet
             for (const tweet of uniqueTweetCandidates) {
+
                 if (
                     !this.client.lastCheckedTweetId ||
                     BigInt(tweet.id) > this.client.lastCheckedTweetId
@@ -244,7 +247,7 @@ export class TwitterInteractionClient {
 
                     if (existingResponse) {
                         elizaLogger.log(
-                            `Already responded to tweet ${tweet.id}, skipping`
+                            `Already responded to tweet ${tweet.id} + ${tweet.text}, skipping`
                         );
                         continue;
                     }
