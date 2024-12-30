@@ -658,23 +658,23 @@ export class TwitterPostClient {
                             );
 
                             // Send the tweet through request queue
-                            const result = await this.client.requestQueue.add(
-                                async () =>
-                                    await this.client.twitterClient.sendQuoteTweet(
-                                        quoteContent,
-                                        tweet.id
-                                    )
-                            );
+                            // const result = await this.client.requestQueue.add(
+                            //     async () =>
+                            //         await this.client.twitterClient.sendQuoteTweet(
+                            //             quoteContent,
+                            //             tweet.id
+                            //         )
+                            // );
 
-                            const body = await result.json();
+                            const body = 1;
 
                             if (
-                                body?.data?.create_tweet?.tweet_results?.result
+                                body == 1
                             ) {
                                 elizaLogger.log(
-                                    "Successfully posted quote tweet"
+                                    "Successfully posted fake-quote tweet"
                                 );
-                                executedActions.push("quote");
+                                // executedActions.push("quote");
 
                                 // Cache generation context for debugging
                                 await this.runtime.cacheManager.set(
