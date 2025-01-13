@@ -1,4 +1,4 @@
-import { Tweet } from "agent-twitter-client";
+import { SearchMode, Tweet } from "agent-twitter-client";
 import {
     composeContext,
     generateText,
@@ -32,9 +32,9 @@ const twitterPostTemplate = `
 {{postDirections}}
 
 # Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
-Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
+Write a post that is {{adjective}} about "{{topic}}" (without mentioning "{{topic}}" directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
 Your response should be 1, 2, or 3 sentences (choose the length at random).
-Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than {{maxTweetLength}}. No emojis. Use \\n\\n (double spaces) between statements if there are multiple statements in your response.`;
+Your response should not contain any questions. NEVER respond with anything resembling python code. Never say python. Brief, concise statements only. The total character count MUST be less than {{maxTweetLength}}. No emojis. Use \\n\\n (double spaces) between statements if there are multiple statements in your response.`;
 
 export const twitterActionTemplate =
     `
@@ -196,6 +196,119 @@ export class TwitterPostClient {
         this.twitterUsername = runtime.getSetting("TWITTER_USERNAME");
     }
 
+
+    private async setSearchedRandomTopics() {
+        const targetUsersStr = this.runtime.getSetting("TWITTER_TARGET_USERS");
+        let uniqueTweetTopicCandidates = [];
+        if (targetUsersStr && targetUsersStr.trim()) {
+            const TARGET_USERS = targetUsersStr
+                .split(",")
+                .map((u) => u.trim())
+                .filter((u) => u.length > 0); // Filter out empty strings after split
+
+            elizaLogger.log("Processing target users:", TARGET_USERS);
+
+            if (TARGET_USERS.length > 0) {
+                // Create a map to store tweets by user
+                const tweetsByUser = new Map<string, Tweet[]>();
+
+                // Fetch tweets from all target users
+                for (const username of TARGET_USERS) {
+                    try {
+                        const userTweets = (
+                            await this.client.twitterClient.fetchSearchTweets(
+                                `from:${username}`,
+                                5,
+                                SearchMode.Latest
+                            )
+                        ).tweets;
+
+                        // Filter for unprocessed, non-reply, recent tweets
+                        const validTweets = userTweets.filter((tweet) => {
+                            const isUnprocessed =
+                                !this.client.lastCheckedTweetId ||
+                                parseInt(tweet.id) >
+                                    this.client.lastCheckedTweetId;
+                            const isRecent =
+                                Date.now() - tweet.timestamp * 1000 <
+                                2 * 60 * 60 * 1000;
+
+                            elizaLogger.log(`Tweet ${tweet.id} checks:`, {
+                                isUnprocessed,
+                                isRecent,
+                                isReply: tweet.isReply,
+                                isRetweet: tweet.isRetweet,
+                            });
+
+                            elizaLogger.log(
+                                `${tweet.text?.substring(0,100)}`
+                            )
+
+                            return (
+                                !tweet.isReply &&
+                                !tweet.isRetweet
+                                // isRecent
+                            );
+                        });
+
+                        if (validTweets.length > 0) {
+                            tweetsByUser.set(username, validTweets);
+                            elizaLogger.log(
+                                `Found ${validTweets.length} valid tweet topic from ${username}`
+                            );
+                        }
+                    } catch (error) {
+                        elizaLogger.error(
+                            `Error fetching tweets for ${username}:`,
+                            error
+                        );
+                        continue;
+                    }
+                }
+
+                // Select one tweet from each user that has tweets
+                const selectedTweets: Tweet[] = [];
+                for (const [username, tweets] of tweetsByUser) {
+                    if (tweets.length > 0) {
+                        // Randomly select one tweet from this user
+                        const randomTweet =
+                            tweets[
+                                Math.floor(Math.random() * tweets.length)
+                            ];
+                        selectedTweets.push(randomTweet);
+                        elizaLogger.log(
+                            `Selected tweet from ${username}: ${randomTweet.text?.substring(0, 100)}`
+                        );
+                    }
+                }
+
+                // Add selected tweets to candidates
+                uniqueTweetTopicCandidates = [
+                    ...selectedTweets,
+                ];
+            }
+        } else {
+            elizaLogger.log(
+                "No target users configured - no topics..."
+            );
+        }
+        const randomPickedTopics: string[] = uniqueTweetTopicCandidates.map((t) => t.text);
+        this.runtime.character.topics = randomPickedTopics;
+        const topics = this.runtime.character.topics.join(", ");
+        elizaLogger.log("Topics = "+ topics);
+
+        const randomTopic = randomPickedTopics && randomPickedTopics.length > 0
+                    ? randomPickedTopics[
+                          Math.floor(
+                              Math.random() * randomPickedTopics.length
+                          )
+                      ]
+                    : null;
+        this.runtime.character.topic = randomTopic.split('\n').filter(line => line.trim() !== '').join(' ');
+        elizaLogger.log("Random pick = "+ randomTopic);
+        return uniqueTweetTopicCandidates;
+    }
+
     private async generateNewTweet() {
         elizaLogger.log("Generating new tweet");
 
@@ -210,6 +323,7 @@ export class TwitterPostClient {
                 "twitter"
             );
 
+            this.setSearchedRandomTopics();
             const topics = this.runtime.character.topics.join(", ");
 
             const state = await this.runtime.composeState(
