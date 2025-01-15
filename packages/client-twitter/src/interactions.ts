@@ -14,6 +14,9 @@ import {
     stringToUuid,
     elizaLogger,
     getEmbeddingZeroVector,
+    createGoal,
+    getGoals,
+    GoalStatus,
 } from "@ai16z/eliza";
 import { ClientBase } from "./base";
 import { buildConversationThread, sendTweet, wait } from "./utils.ts";
@@ -52,6 +55,19 @@ Thread of Tweets You Are Replying To:
 Here is the current post text again. Remember to include an action if the current post text includes a prompt that asks for one of the available actions mentioned above (does not need to be exact)
 {{currentPost}}
 ` + messageCompletionFooter;
+
+const determineGiveawayTimeTemplate = (tweetDate: string) =>
+    `# INSTRUCTIONS: Determine what time they want the giveaway to end and how many winners they want based on the information.
+
+    RULE: take account of the date as needed: ${tweetDate}
+
+    Information:
+    {{currentPost}}
+
+    Do not comment. Just reply back with a single number formatted into a json with the key text.
+    Also just a single number for how many winners there are in the same json with the key action.
+    The number represents in how many hours and put it into the text field in json:
+    `+ messageCompletionFooter;
 
 export const twitterShouldRespondTemplate = (targetUsersStr: string) =>
     `# INSTRUCTIONS: Determine if {{agentName}} (@{{twitterUserName}}) should respond to the message and participate in the conversation. Do not comment. Just respond with "true" or "false".
@@ -130,6 +146,10 @@ export class TwitterInteractionClient {
                 mentionCandidates.length
             );
             let uniqueTweetCandidates = [...mentionCandidates];
+
+            // Create any giveaways it finds
+            let afterGaDone = await this.createGiveaways(uniqueTweetCandidates); // tz
+
             // Only process target users if configured
             if (targetUsersStr && targetUsersStr.trim()) {
                 const TARGET_USERS = targetUsersStr
@@ -299,6 +319,133 @@ export class TwitterInteractionClient {
         } catch (error) {
             elizaLogger.error("Error handling Twitter interactions:", error);
         }
+    }
+
+    private async createGiveaways(mentionTweets: Tweet[]) {
+        for (const tweet of mentionTweets) {
+            if (
+                !this.client.lastCheckedTweetId ||
+                BigInt(tweet.id) > this.client.lastCheckedTweetId
+            ) {
+                if (tweet.text.toLowerCase().includes('#pngiveaway')) {
+
+                // Generate the tweetId UUID the same way it's done in handleTweet
+                const tweetId = stringToUuid(
+                    tweet.id + "-" + this.runtime.agentId
+                );
+
+                // Check if we've already processed this tweet
+                const existingResponse =
+                    await this.runtime.messageManager.getMemoryById(
+                        tweetId
+                    );
+
+                if (existingResponse) {
+                    elizaLogger.log(
+                        `Already responded to tweet ${tweet.id} + ${tweet.text}, skipping`
+                    );
+                    continue;
+                }
+                elizaLogger.log("New Tweet found", tweet.permanentUrl);
+
+                const roomId = stringToUuid(
+                    tweet.conversationId + "-" + this.runtime.agentId
+                );
+
+                const userIdUUID =
+                    tweet.userId === this.client.profile.id
+                        ? this.runtime.agentId
+                        : stringToUuid(tweet.userId!);
+
+                await this.runtime.ensureConnection(
+                    userIdUUID,
+                    roomId,
+                    tweet.username,
+                    tweet.name,
+                    "twitter"
+                );
+
+                elizaLogger.log("Processing Giveaway Tweet: ", tweet.id);
+                    const formatTweet = (tweet: Tweet) => {
+                        return `  ID: ${tweet.id}
+            From: ${tweet.name} (@${tweet.username})
+            Text: ${tweet.text}`;
+                    };
+                    const currentPost = formatTweet(tweet);
+
+                    elizaLogger.debug("Thread: ", tweet.thread);
+                    const formattedConversation = tweet.thread
+                        .map(
+                            (tweet) => `@${tweet.username} (${new Date(
+                                tweet.timestamp * 1000
+                            ).toLocaleString("en-US", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                month: "short",
+                                day: "numeric",
+                            })}):
+                    ${tweet.text}`
+                        )
+                        .join("\n\n");
+
+                    elizaLogger.debug("formattedConversation: ", formattedConversation);
+                    const message = {
+                        content: { text: tweet.text },
+                        agentId: this.runtime.agentId,
+                        userId: userIdUUID,
+                        roomId,
+                    };
+                    let state = await this.runtime.composeState(message, {
+                        twitterClient: this.client.twitterClient,
+                        twitterUserName: this.runtime.getSetting("TWITTER_USERNAME"),
+                        currentPost,
+                        formattedConversation,
+                    });
+
+                let tweetDate = tweet.timeParsed.toISOString();
+
+                const giveawayContext = composeContext({
+                    state,
+                    template: determineGiveawayTimeTemplate(tweetDate),
+                });
+
+                const giveawayHours = await generateMessageResponse({
+                    runtime: this.runtime,
+                    context: giveawayContext,
+                    modelClass: ModelClass.MEDIUM,
+                });
+
+                elizaLogger.log(JSON.stringify(giveawayHours, null, 2))
+                elizaLogger.log("Giveaway Tweet id: "+tweet.id+" and time is: "+tweet.timeParsed);
+                elizaLogger.log("Ends in "+ giveawayHours.text);
+                elizaLogger.log("With # of winners: ", giveawayHours.action);
+                let hours: number = parseInt(giveawayHours.text, 10);
+                if (Number.isNaN(hours) || hours < 1) {
+                    hours = 1;
+                }
+                let giveawayTweetTimeEnd: Date = new Date();
+                giveawayTweetTimeEnd.setTime(giveawayTweetTimeEnd.getTime() + hours * 60 * 60 * 1000)
+                let giveawayAmount: number = parseInt(giveawayHours.action, 10);
+                if (Number.isNaN(giveawayAmount) || giveawayAmount === 0) {
+                    giveawayAmount = 1;
+                }
+
+                createGoal({runtime: this.runtime,
+                    goal: {
+                        id: tweetId,
+                        roomId,
+                        userId: userIdUUID,
+                        name: tweet.id,
+                        status: GoalStatus.IN_PROGRESS,
+                        objectives: [ // 2025-01-14T15:29:43.000Z
+                            { id:"giveawayTweetTimeEnd", description: giveawayTweetTimeEnd.toISOString(), completed: false },
+                            { id:"giveawayAmount", description: giveawayAmount.toString(), completed: false }
+                        ]}
+                });
+            }
+        }
+        }
+        return 1;
     }
 
     private async setSearchedRandomTopics() {

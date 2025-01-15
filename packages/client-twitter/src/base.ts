@@ -126,6 +126,14 @@ export class ClientBase extends EventEmitter {
         return tweet;
     }
 
+    async getFreshTweet(tweetId: string): Promise<Tweet> {
+        const tweet = await this.requestQueue.add(() =>
+            this.twitterClient.getTweet(tweetId)
+        );
+
+        return tweet;
+    }
+
     callback: (self: ClientBase) => any = null;
 
     onReady() {

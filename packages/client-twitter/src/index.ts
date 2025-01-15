@@ -4,12 +4,14 @@ import { validateTwitterConfig } from "./environment.ts";
 import { TwitterInteractionClient } from "./interactions.ts";
 import { TwitterPostClient } from "./post.ts";
 import { TwitterSearchClient } from "./search.ts";
+import { TwitterGiveawayClient } from "./giveaway.ts";
 
 class TwitterManager {
     client: ClientBase;
     post: TwitterPostClient;
     search: TwitterSearchClient;
     interaction: TwitterInteractionClient;
+    giveaway: TwitterGiveawayClient;
     constructor(runtime: IAgentRuntime, enableSearch: boolean) {
         this.client = new ClientBase(runtime);
         this.post = new TwitterPostClient(this.client, runtime);
@@ -25,6 +27,7 @@ class TwitterManager {
         }
 
         this.interaction = new TwitterInteractionClient(this.client, runtime);
+        this.giveaway = new TwitterGiveawayClient(this.client, runtime);
     }
 }
 
@@ -44,6 +47,8 @@ export const TwitterClientInterface: Client = {
         await manager.post.start();
 
         await manager.interaction.start();
+
+        await manager.giveaway.start();
 
         await manager.search?.start();
 

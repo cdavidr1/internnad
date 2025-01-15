@@ -1,3 +1,4 @@
+import { zeroUuid } from "./test_resources/constants.ts";
 import {
     IAgentRuntime,
     type Goal,
@@ -50,6 +51,18 @@ export const updateGoal = async ({
     goal: Goal;
 }) => {
     return runtime.databaseAdapter.updateGoal(goal);
+};
+
+export const removeGoal = async ({
+    runtime,
+    goalId
+}: {
+    runtime: IAgentRuntime;
+    goalId: UUID;
+}) => {
+    return runtime.databaseAdapter.removeGoal(
+        goalId
+    );
 };
 
 export const createGoal = async ({
