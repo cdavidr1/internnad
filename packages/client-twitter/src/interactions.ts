@@ -16,6 +16,7 @@ import {
     getEmbeddingZeroVector,
     createGoal,
     getGoals,
+    Goal,
     GoalStatus,
 } from "@ai16z/eliza";
 import { ClientBase } from "./base";
@@ -430,18 +431,30 @@ export class TwitterInteractionClient {
                     giveawayAmount = 1;
                 }
 
-                createGoal({runtime: this.runtime,
-                    goal: {
-                        id: tweetId,
-                        roomId,
-                        userId: userIdUUID,
-                        name: tweet.id,
-                        status: GoalStatus.IN_PROGRESS,
-                        objectives: [ // 2025-01-14T15:29:43.000Z
-                            { id:"giveawayTweetTimeEnd", description: giveawayTweetTimeEnd.toISOString(), completed: false },
-                            { id:"giveawayAmount", description: giveawayAmount.toString(), completed: false }
-                        ]}
+                elizaLogger.log("THE TWEET ID IS: " +tweetId);
+                const goals : Goal[] = await getGoals({
+                    runtime: this.runtime,
+                    id: tweetId,
+                    roomId: stringToUuid("placeholder"),
+                    onlyInProgress: true
                 });
+
+                if (goals.length > 0) {
+                    elizaLogger.log("Already created goal");
+                } else {
+                    createGoal({runtime: this.runtime,
+                        goal: {
+                            id: tweetId,
+                            roomId,
+                            userId: userIdUUID,
+                            name: tweet.id,
+                            status: GoalStatus.IN_PROGRESS,
+                            objectives: [ // 2025-01-14T15:29:43.000Z
+                                { id:"giveawayTweetTimeEnd", description: giveawayTweetTimeEnd.toISOString(), completed: false },
+                                { id:"giveawayAmount", description: giveawayAmount.toString(), completed: false }
+                            ]}
+                    });
+                }
             }
         }
         }

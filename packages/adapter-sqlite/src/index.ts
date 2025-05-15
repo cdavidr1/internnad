@@ -502,11 +502,19 @@ export class SqliteDatabaseAdapter
     async getGoals(params: {
         roomId: UUID;
         userId?: UUID | null;
+        id?: UUID;
         onlyInProgress?: boolean;
         count?: number;
     }): Promise<Goal[]> {
         let sql = "SELECT * FROM goals WHERE roomId = ? or roomId is not null";
         const queryParams = [params.roomId];
+        console.log("SELECTING GOALS...");
+        if (params.id) {
+            console.log("CHECKING MFER ID #");
+            console.log(params.id);
+            sql += " AND id = ?";
+            queryParams.push(params.id);
+        }
 
         if (params.userId) {
             sql += " AND userId = ?";

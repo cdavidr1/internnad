@@ -881,6 +881,7 @@ export interface IDatabaseAdapter {
 
     getGoals(params: {
         agentId: UUID;
+        id?: UUID;
         roomId: UUID;
         userId?: UUID | null;
         onlyInProgress?: boolean;

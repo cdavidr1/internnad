@@ -8,12 +8,14 @@ import {
 
 export const getGoals = async ({
     runtime,
+    id,
     roomId,
     userId,
     onlyInProgress = true,
     count = 5,
 }: {
     runtime: IAgentRuntime;
+    id?: UUID;
     roomId: UUID;
     userId?: UUID;
     onlyInProgress?: boolean;
@@ -21,6 +23,7 @@ export const getGoals = async ({
 }) => {
     return runtime.databaseAdapter.getGoals({
         agentId: runtime.agentId,
+        id,
         roomId,
         userId,
         onlyInProgress,

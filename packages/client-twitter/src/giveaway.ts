@@ -56,7 +56,8 @@ export class TwitterGiveawayClient {
         const goals : Goal[] = await getGoals({
             runtime: this.runtime,
             roomId: stringToUuid("placeholder"),
-            onlyInProgress: true
+            onlyInProgress: true,
+            count: 30
         });
 
         for(const goal of goals) {
@@ -92,22 +93,26 @@ export class TwitterGiveawayClient {
                     elizaLogger.log(JSON.stringify(thread, null, 2));
                     let randomWinners: string[] = this.pickRandomUsernames(thread, giveawayAmount);
 
-                    const message = {
-                        content: { text: tweet.text, winners: randomWinners },
-                        agentId: this.runtime.agentId,
-                        userId: goal.userId,
-                        roomId: goal.roomId
-                    };
+                    if (tweet != null && tweet.text != null) {
+                        const message = {
+                            content: { text: tweet.text, winners: randomWinners },
+                            agentId: this.runtime.agentId,
+                            userId: goal.userId,
+                            roomId: goal.roomId
+                        };
 
-                    // tweet winners
-                    this.handleTweet({tweet,message, winners: randomWinners});
+                        // tweet winners
+                        this.handleTweet({tweet,message, winners: randomWinners});
 
-                    // delete goal
-                    removeGoal({
-                        runtime: this.runtime,
-                        goalId
-                    });
-                    elizaLogger.log("Giveaway ended: "+ goalId);
+                        // delete goal
+                        removeGoal({
+                            runtime: this.runtime,
+                            goalId
+                        });
+                        elizaLogger.log("Giveaway ended: "+ goalId);
+                    } else {
+                        elizaLogger.log("NULL GIVEAWAY!");
+                    }
                 } else {
                     elizaLogger.log(giveawayTweetId);
                     elizaLogger.log("Giveaway not ended yet...");
@@ -119,6 +124,7 @@ export class TwitterGiveawayClient {
     private pickRandomUsernames(thread: Tweet[], x: number): string[] {
         // 1. Extract usernames from each tweet (filter out undefined or null).
         const allUsernames = thread
+          .filter((t) => t.username !== this.twitterUsername)
           .map((t) => t.username)
           .filter((username): username is string => !!username); // Type guard for non-empty
 
